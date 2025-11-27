@@ -8,7 +8,7 @@ Parses VTT (WebVTT) transcript files, groups statements by speaker, and uses AI 
 - **Speaker Grouping**: Combines consecutive statements from the same speaker
 - **Smart Chunking**: Splits large transcripts into chunks that fit LLM context windows
 - **AI Cleaning**: Uses Azure OpenAI API to remove filler words ("um", "uh", "like", etc.)
-- **Markdown Export**: Exports with strikethrough to show what was removed
+- **Markdown Export**: Exports grouped transcript with timestamps
 
 ## Installation
 
@@ -26,7 +26,7 @@ cp .env.example .env
 ### Basic Usage
 
 ```bash
-# Parse and export raw transcript
+# Parse VTT and export raw transcript
 python vtt_parser.py
 
 # Clean transcript with AI
@@ -53,7 +53,7 @@ MarkdownExporter.export_raw(statements, 'output.md')
 ### With LLM Cleaning
 
 ```python
-from vtt_parser import VTTParser, TranscriptGrouper
+from vtt_parser import VTTParser, TranscriptGrouper, TranscriptChunker
 from clean_transcript import TranscriptCleaner
 
 # Parse and group
@@ -62,16 +62,15 @@ segments = parser.parse()
 grouper = TranscriptGrouper(segments)
 statements = grouper.group_by_speaker()
 
+# Create chunks
+chunker = TranscriptChunker(statements, max_tokens=2000)
+chunks = chunker.create_chunks()
+
 # Clean with LLM
 cleaner = TranscriptCleaner()
-cleaned = [cleaner.clean_statement(s) for s in statements]
-
-# Export with strikethrough diff
-MarkdownExporter.export_with_strikethrough(
-    statements, 
-    cleaned, 
-    'cleaned.md'
-)
+for chunk in chunks:
+    cleaned_texts = cleaner.clean_chunk(chunk)
+    # Process cleaned_texts as needed
 ```
 
 ## Configuration
@@ -104,18 +103,17 @@ cleaner = TranscriptCleaner(
 ## Output Files
 
 - `transcript_raw.md`: Raw transcript grouped by speaker with timestamps
-- `transcript_cleaned.md`: Cleaned transcript with ~~strikethrough~~ showing removed words
+- `transcript_cleaned.md`: Cleaned transcript grouped by speaker with timestamps
 
 ## Example Output
 
 ```markdown
-## 1. Grant Smith
+## Grant Smith
 
-**Time:** 01:30:05.625
-
-So ~~I think~~ ~~absolutely~~ where we're seeing power apps already in use, replacing 
-that form with an interactive front end that captures all the same information 
-~~you know~~ is definitely what we'd be looking to do.
+**01:30:05.625**  
+Where we're seeing power apps already in use, replacing that form with an 
+interactive front end that captures all the same information is definitely 
+what we'd be looking to do.
 ```
 
 ## Architecture
@@ -129,9 +127,9 @@ that form with an interactive front end that captures all the same information
 ## Notes
 
 - Token estimation uses ~4 characters per token (rough approximation)
-- Strikethrough diff is word-level (not character-level)
 - Preserves original timestamps and speaker names
 - Uses Azure OpenAI Service
+- Cleaned output shows only the final cleaned text (no strikethrough diff)
 
 ## License
 
